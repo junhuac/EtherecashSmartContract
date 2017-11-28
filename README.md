@@ -64,3 +64,5 @@ The **balanceOf()** will now return following values:
 * balanceOf(0x111) will return 60
 * balanceOf(0x222) will return 90
 
+## NOTE : 
+The above two addresses(0X111, 0X222) taken in Example are not Valid Ethereum Addresses, to make transaction you need to have a valid Ethereum Address.
