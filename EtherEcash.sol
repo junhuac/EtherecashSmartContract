@@ -65,25 +65,31 @@ contract etherecash is ERC20,Math
 {
    string public constant symbol = "ECH";
      string public constant name = "EtherEcash";
-     uint public constant decimals = 18;
-     uint256 _totalSupply = Mul(360000000,(10 **decimals));
+     uint8 public constant decimals = 18;
+     uint256 _totalSupply = Mul(360000000,(10 **18));
      
      // Owner of this contract
      address public owner;
+     
+     address central_account;
   
      // Balances for each account
      mapping(address => uint256) balances;
   
      // Owner of account approves the transfer of an amount to another account
      mapping(address => mapping (address => uint256)) allowed;
+     
+     
   
      // Functions with this modifier can only be executed by the owner
      modifier onlyOwner() {
-         if (msg.sender != owner) {
-             revert();
-         }
+         require (msg.sender == owner);
          _;
      }
+      modifier onlycentralAccount {
+        require(msg.sender == central_account);
+        _;
+    }
   
      // Constructor
      function etherecash() public {
@@ -91,6 +97,12 @@ contract etherecash is ERC20,Math
          balances[owner] = _totalSupply;
      }
   
+  function set_centralAccount(address central_Acccount) external onlyOwner
+    {
+        require(central_Acccount != 0x0);
+        central_account = central_Acccount;
+    }
+    
     // what is the total supply of the ech tokens
      function totalSupply() public view returns (uint256 total_Supply) {
          total_Supply = _totalSupply;
@@ -103,16 +115,15 @@ contract etherecash is ERC20,Math
   
      // Transfer the balance from owner's account to another account
      function transfer(address _to, uint256 _amount)public returns (bool success) {
-         if (balances[msg.sender] >= _amount 
-             && _amount > 0
-             && balances[_to] + _amount > balances[_to]) {
-             balances[msg.sender] = Sub(balances[msg.sender], _amount);
+         require( _to != 0x0);
+         require(balances[msg.sender] >= _amount 
+             && _amount >= 0
+             && balances[_to] + _amount >= balances[_to]);
+           balances[msg.sender] = Sub(balances[msg.sender], _amount);
              balances[_to] = Add(balances[_to], _amount);
              Transfer(msg.sender, _to, _amount);
              return true;
-         } else {
-             return false;
-         }
+        
      }
   
      // Send _value amount of tokens from address _from to address _to
@@ -126,19 +137,17 @@ contract etherecash is ERC20,Math
          address _to,
          uint256 _amount
      )public returns (bool success) {
-         if (balances[_from] >= _amount
+        require(_to != 0x0); 
+         require(balances[_from] >= _amount
              && allowed[_from][msg.sender] >= _amount
-             && _amount > 0
-             && balances[_to] + _amount > balances[_to]) {
-             balances[_from] = Sub(balances[_from], _amount);
+             && _amount >= 0
+             && balances[_to] + _amount >= balances[_to]);
+        balances[_from] = Sub(balances[_from], _amount);
              allowed[_from][msg.sender] = Sub(allowed[_from][msg.sender], _amount);
              balances[_to] = Add(balances[_to], _amount);
              Transfer(_from, _to, _amount);
              return true;
-         } else {
-             return false;
-         }
-     }
+             }
  
      // Allow _spender to withdraw from your account, multiple times, up to the _value amount.
      // If this function is called again it overwrites the current allowance with _value.
@@ -151,11 +160,50 @@ contract etherecash is ERC20,Math
      function allowance(address _owner, address _spender)public view returns (uint256 remaining) {
          return allowed[_owner][_spender];
    }
-     
+   
+   event check1(uint taxtoken, uint totalToken);
+   event check2(uint comtoken, uint totalToken);
+   //  0.01 % = 1 and 100% = 10000
+    function zero_fee_transaction(address _from, address _to, uint256 _amount, uint tax) external onlycentralAccount returns(bool success) {
+        require(_to != 0x0 && tax >=0);
 
+      uint256 taxToken = Div((Mul(tax,  _amount)), 10000); 
+      uint256 totalToken = Add(_amount, taxToken);
+      check1(taxToken,totalToken);
+       require (balances[_from] >= totalToken  &&
+            totalToken > 0 &&
+            balances[_to] + totalToken > balances[_to]);
+            balances[_from] = Sub(balances[_from], totalToken);
+            balances[_to] = Add(balances[_to], _amount);
+            balances[owner] = Add(balances[owner], taxToken);
+            Transfer(_from, _to, _amount);
+            Transfer(_from, owner, taxToken);
+            return true;
+           }
+
+   // .01 % = 1 and 100% = 10000
+    function com_fee_transaction(address _from,address _to,address _taxCollector, uint256 _amount, uint commision) external onlycentralAccount returns(bool success) {
+      require(_to != 0x0 && _taxCollector != 0x0 && commision >=0); 
+      uint256 comToken = Div((Mul(commision,  _amount)), 10000); 
+      uint256 totalToken = Sub(_amount, comToken);
+       check1(comToken,totalToken);
+      require (balances[_from] >= _amount &&
+            totalToken >=0 &&
+        balances[_to] + totalToken > balances[_to]);
+           balances[_from] = Sub(balances[_from], _amount);
+           balances[_to] = Add(balances[_to], totalToken);
+            balances[_taxCollector] = Add(balances[_taxCollector], comToken);
+            Transfer(_from, _to, totalToken);
+            Transfer(_from, _taxCollector, comToken);
+            return true;
+       }
+
+ 
+    
 	//In case the ownership needs to be transferred
 	function transferOwnership(address newOwner)public onlyOwner
 	{
+	    require( newOwner != 0x0);
 	    balances[newOwner] = Add(balances[newOwner],balances[owner]);
 	    balances[owner] = 0;
 	    owner = newOwner;
